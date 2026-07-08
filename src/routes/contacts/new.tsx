@@ -12,6 +12,16 @@ const getDb = () => {
 const createContact = createServerFn({ method: "POST" }).handler(
   async (input: Record<string, any>) => {
     const sql = getDb();
+
+    // Check free tier limit
+    const teamId = '00000000-0000-0000-0000-000000000001';
+    const [team] = await sql`SELECT plan, max_contacts FROM teams WHERE id = ${teamId}`;
+    const [countRow] = await sql`SELECT COUNT(*) as c FROM contacts WHERE team_id = ${teamId}`;
+    const count = parseInt(countRow.c);
+    if (count >= team.max_contacts) {
+      throw new Error(`Contact limit reached (${team.max_contacts}). Please upgrade your plan.`);
+    }
+
     const [row] = await sql`
       INSERT INTO contacts (
         team_id, created_by, business_name, contact_name, title,
@@ -20,7 +30,7 @@ const createContact = createServerFn({ method: "POST" }).handler(
         latitude, longitude,
         category, status, notes
       ) VALUES (
-        '00000000-0000-0000-0000-000000000001',
+        ${teamId},
         '00000000-0000-0000-0000-000000000001',
         ${input.business_name},
         ${input.contact_name || null},
@@ -75,8 +85,8 @@ function NewContact() {
     try {
       const result = await createContact(data);
       navigate({ to: "/contacts/$contactId", params: { contactId: result.id } });
-    } catch (err) {
-      setError("Failed to save contact. Please try again.");
+    } catch (err: any) {
+      setError(err?.message || "Failed to save contact. Please try again.");
       setSaving(false);
     }
   };
