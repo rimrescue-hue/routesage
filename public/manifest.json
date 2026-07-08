@@ -1,0 +1,26 @@
+{
+  "name": "RouteSage",
+  "short_name": "RouteSage",
+  "description": "Field sales CRM — track visits, manage contacts, plan routes",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#4f46e5",
+  "orientation": "portrait",
+  "scope": "/",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/pwa-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/pwa-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -5,6 +5,7 @@ import {
   createRootRoute,
 } from "@tanstack/react-router";
 import type { ReactNode } from "react";
+import { useEffect } from "react";
 
 import appCss from "~/styles/app.css?url";
 
@@ -12,10 +13,23 @@ export const Route = createRootRoute({
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
+      { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
       { title: "RouteSage — Field Sales CRM" },
+      // PWA / iOS meta tags
+      { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "default" },
+      { name: "apple-mobile-web-app-title", content: "RouteSage" },
+      { name: "mobile-web-app-capable", content: "yes" },
+      { name: "theme-color", content: "#4f46e5" },
+      { name: "application-name", content: "RouteSage" },
     ],
-    links: [{ rel: "stylesheet", href: appCss }],
+    links: [
+      { rel: "stylesheet", href: appCss },
+      // PWA manifest
+      { rel: "manifest", href: "/manifest.json" },
+      // iOS icon
+      { rel: "apple-touch-icon", href: "/pwa-icon-192.svg", sizes: "192x192" },
+    ],
   }),
   notFoundComponent: () => (
     <div className="flex min-h-dvh items-center justify-center">
@@ -29,6 +43,15 @@ export const Route = createRootRoute({
 });
 
 function RootComponent() {
+  // Register service worker on mount
+  useEffect(() => {
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => {
+        // Service worker registration failed — non-critical
+      });
+    }
+  }, []);
+
   return (
     <RootDocument>
       <Outlet />
