@@ -65,6 +65,12 @@ function RootDocument({ children }: { children: ReactNode }) {
               >
                 Routes
               </a>
+              <a
+                href="/reminders"
+                className="text-sm font-medium text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
+              >
+                Reminders
+              </a>
             </div>
           </div>
         </nav>

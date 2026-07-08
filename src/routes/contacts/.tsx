@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { neon } from "@neondatabase/serverless";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 const getDb = () => {
   const url = process.env.DATABASE_URL;
@@ -508,6 +508,298 @@ function ContactDetail() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Reminders Section */}
+      <RemindersSection contactId={contact.id} />
+
+      {/* Notes Section */}
+      <NotesSection contactId={contact.id} />
+    </div>
+  );
+}
+
+// ---- Reminders Section Component ----
+function RemindersSection({ contactId }: { contactId: string }) {
+  const [reminders, setReminders] = useState<any[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [remindAt, setRemindAt] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => { loadReminders(); }, []);
+
+  const loadReminders = async () => {
+    setLoading(true);
+    try {
+      const sql = getDb();
+      const rows = await sql`
+        SELECT * FROM reminders WHERE contact_id = ${contactId} ORDER BY completed ASC, remind_at ASC LIMIT 20
+      `;
+      setReminders(rows.map((r: any) => ({ ...r, remind_at: String(r.remind_at), created_at: String(r.created_at), completed_at: r.completed_at ? String(r.completed_at) : null })));
+    } catch {}
+    setLoading(false);
+  };
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title.trim() || !remindAt) return;
+    setSaving(true);
+    try {
+      const sql = getDb();
+      await sql`INSERT INTO reminders (user_id, contact_id, title, description, remind_at) VALUES ('00000000-0000-0000-0000-000000000001', ${contactId}, ${title}, ${description || null}, ${remindAt})`;
+      setTitle(""); setDescription(""); setRemindAt(""); setShowForm(false);
+      loadReminders();
+    } catch {}
+    setSaving(false);
+  };
+
+  const handleToggle = async (id: string) => {
+    try {
+      const sql = getDb();
+      await sql`UPDATE reminders SET completed = NOT completed, completed_at = CASE WHEN NOT completed THEN now() ELSE NULL END, updated_at = now() WHERE id = ${id}`;
+      loadReminders();
+    } catch {}
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm("Delete this reminder?")) return;
+    try {
+      const sql = getDb();
+      await sql`DELETE FROM reminders WHERE id = ${id}`;
+      loadReminders();
+    } catch {}
+  };
+
+  return (
+    <div className="mt-8">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl font-bold text-gray-900 dark:text-white">Reminders</h2>
+        <button onClick={() => setShowForm(!showForm)} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+          {showForm ? "Close" : "Add Reminder"}
+        </button>
+      </div>
+
+      {showForm && (
+        <form onSubmit={handleCreate} className="mb-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Title *</label>
+              <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Follow up on proposal" className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Remind on *</label>
+              <input type="date" value={remindAt} onChange={(e) => setRemindAt(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Description</label>
+              <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Optional details" className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+            </div>
+          </div>
+          <div className="mt-3 flex justify-end">
+            <button type="submit" disabled={saving} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50">
+              {saving ? "Saving..." : "Create Reminder"}
+            </button>
+          </div>
+        </form>
+      )}
+
+      <div className="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
+        {loading ? (
+          <div className="flex items-center justify-center p-6 text-sm text-gray-500">Loading...</div>
+        ) : !reminders || reminders.length === 0 ? (
+          <div className="p-6 text-center text-sm text-gray-500 dark:text-gray-400">No reminders for this contact</div>
+        ) : (
+          <div className="divide-y divide-gray-200 dark:divide-gray-700">
+            {reminders.map((r: any) => (
+              <div key={r.id} className={`flex items-center gap-3 p-4 ${r.completed ? "bg-gray-50 dark:bg-gray-800/50" : ""}`}>
+                <button onClick={() => handleToggle(r.id)} className="flex-shrink-0">
+                  {r.completed ? (
+                    <div className="flex h-5 w-5 items-center justify-center rounded-full bg-green-500 text-white">
+                      <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
+                    </div>
+                  ) : (
+                    <div className="h-5 w-5 rounded-full border-2 border-gray-300 hover:border-indigo-500 dark:border-gray-600" />
+                  )}
+                </button>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm font-medium ${r.completed ? "text-gray-500 line-through dark:text-gray-400" : "text-gray-900 dark:text-white"}`}>{r.title}</p>
+                  {r.description && <p className="text-xs text-gray-500 dark:text-gray-400">{r.description}</p>}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs ${new Date(r.remind_at) < new Date() && !r.completed ? "text-red-600 dark:text-red-400" : "text-gray-500 dark:text-gray-400"}`}>
+                    {new Date(r.remind_at).toLocaleDateString()}
+                  </span>
+                  <button onClick={() => handleDelete(r.id)} className="text-xs text-gray-400 hover:text-red-500">✕</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---- Notes Section Component ----
+function NotesSection({ contactId }: { contactId: string }) {
+  const [notes, setNotes] = useState<any[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [noteType, setNoteType] = useState("text");
+  const [title, setTitle] = useState("");
+  const [content, setContent] = useState("");
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => { loadNotes(); }, []);
+
+  const loadNotes = async () => {
+    setLoading(true);
+    try {
+      const sql = getDb();
+      const rows = await sql`SELECT * FROM notes WHERE contact_id = ${contactId} ORDER BY created_at DESC LIMIT 50`;
+      setNotes(rows.map((r: any) => ({ ...r, created_at: String(r.created_at) })));
+    } catch {}
+    setLoading(false);
+  };
+
+  const handlePhotoCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => setPhotoPreview(ev.target?.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title.trim() && !content.trim() && !photoPreview) return;
+    setSaving(true);
+    try {
+      const sql = getDb();
+      await sql`
+        INSERT INTO notes (contact_id, user_id, note_type, title, content, file_url, file_type)
+        VALUES (${contactId}, '00000000-0000-0000-0000-000000000001',
+                ${noteType}, ${title || null}, ${content || null},
+                ${photoPreview || null}, ${noteType === "photo" ? "image/png" : null})
+      `;
+      setTitle(""); setContent(""); setNoteType("text"); setPhotoPreview(null); setShowForm(false);
+      loadNotes();
+    } catch {}
+    setSaving(false);
+  };
+
+  const handleDelete = async (noteId: string) => {
+    if (!window.confirm("Delete this note?")) return;
+    try {
+      const sql = getDb();
+      await sql`DELETE FROM notes WHERE id = ${noteId}`;
+      loadNotes();
+    } catch {}
+  };
+
+  return (
+    <div className="mt-8">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl font-bold text-gray-900 dark:text-white">Notes</h2>
+        <button onClick={() => setShowForm(!showForm)} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+          {showForm ? "Close" : "Add Note"}
+        </button>
+      </div>
+
+      {showForm && (
+        <form onSubmit={handleCreate} className="mb-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
+          <div className="mb-3 flex gap-2">
+            <button type="button" onClick={() => setNoteType("text")} className={`rounded-lg px-3 py-1.5 text-xs font-medium ${noteType === "text" ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300" : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400"}`}>Text</button>
+            <button type="button" onClick={() => { setNoteType("photo"); setPhotoPreview(null); }} className={`rounded-lg px-3 py-1.5 text-xs font-medium ${noteType === "photo" ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300" : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400"}`}>Photo</button>
+            <button type="button" onClick={() => setNoteType("voice")} className={`rounded-lg px-3 py-1.5 text-xs font-medium ${noteType === "voice" ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300" : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400"}`}>Voice</button>
+          </div>
+
+          <div className="space-y-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Title</label>
+              <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Note title" className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+            </div>
+
+            {noteType === "text" && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Content</label>
+                <textarea value={content} onChange={(e) => setContent(e.target.value)} rows={3} placeholder="Type your notes here..." className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+              </div>
+            )}
+
+            {noteType === "photo" && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Upload Photo</label>
+                <input type="file" accept="image/*" capture="environment" onChange={handlePhotoCapture} className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-indigo-950 dark:file:text-indigo-300" />
+                {photoPreview && (
+                  <div className="mt-2">
+                    <img src={photoPreview} alt="Preview" className="max-h-48 rounded-lg object-contain" />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {noteType === "voice" && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Voice Note</label>
+                <input type="file" accept="audio/*" capture="user" className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-indigo-950 dark:file:text-indigo-300" />
+                <p className="mt-1 text-xs text-gray-400">Record an audio note (voice recordings stored on device)</p>
+              </div>
+            )}
+          </div>
+
+          <div className="mt-3 flex justify-end">
+            <button type="submit" disabled={saving} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50">
+              {saving ? "Saving..." : "Save Note"}
+            </button>
+          </div>
+        </form>
+      )}
+
+      <div className="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
+        {loading ? (
+          <div className="flex items-center justify-center p-6 text-sm text-gray-500">Loading...</div>
+        ) : !notes || notes.length === 0 ? (
+          <div className="p-6 text-center text-sm text-gray-500 dark:text-gray-400">No notes yet</div>
+        ) : (
+          <div className="divide-y divide-gray-200 dark:divide-gray-700">
+            {notes.map((note: any) => (
+              <div key={note.id} className="p-4">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-indigo-100 text-sm dark:bg-indigo-950">
+                    {note.note_type === "text" ? "📝" : note.note_type === "photo" ? "📷" : "🎤"}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-medium text-gray-900 dark:text-white">{note.title || (note.note_type === "text" ? "Text Note" : note.note_type === "photo" ? "Photo" : "Voice Note")}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">{new Date(note.created_at).toLocaleString()}</p>
+                      </div>
+                      <button onClick={() => handleDelete(note.id)} className="text-xs text-gray-400 hover:text-red-500">✕</button>
+                    </div>
+                    {note.content && <p className="mt-1 text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">{note.content}</p>}
+                    {note.file_url && note.note_type === "photo" && (
+                      <div className="mt-2">
+                        <img src={note.file_url} alt="Note photo" className="max-h-48 rounded-lg object-contain" />
+                      </div>
+                    )}
+                    {note.file_url && note.note_type === "voice" && (
+                      <div className="mt-2">
+                        <audio controls src={note.file_url} className="w-full max-w-xs" />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
